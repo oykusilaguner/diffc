@@ -1,8 +1,11 @@
 import cupy as cp
 import numpy as np
+import os
+
+_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Load the CUDA module
-cuda_code = open("lib/diffc/rcc/cuda_kernel_laplace.cu", "r").read()
+cuda_code = open(os.path.join(_dir, "cuda_kernel_laplace.cu"), "r").read()
 cuda_module = cp.RawModule(code=cuda_code)
 
 # Get the kernel functions
