@@ -74,3 +74,35 @@ class DDPM_CIFAR10(LatentNoisePredictionModel):
             noisy_latent.to(self.dtype), t
         ).sample
         return noise_pred.to(noisy_latent.dtype)
+    
+
+class DDPM_CIFAR10_LL_PRUNED(DDPM_CIFAR10):
+    """DDPM trained on LL-pruned CIFAR-10. Same architecture, different weights."""
+
+    def __init__(
+        self,
+        ema_model_dir="pretrained_models/ll_pruned_ddpm_cifar10/ema_model",
+        device="cuda",
+        dtype=torch.float32,
+    ):
+        self.device = device
+        self.dtype = dtype
+
+        self.unet = UNet2DModel.from_pretrained(ema_model_dir).to(device).to(dtype)
+        self.unet.eval()
+
+        self.scheduler = DDPMScheduler(
+            num_train_timesteps=1000,
+            beta_start=1e-4,
+            beta_end=2e-2,
+            beta_schedule="linear",
+            prediction_type="epsilon",
+        )
+        self.scheduler.set_timesteps(1000)
+
+        alphas_cumprod = self.scheduler.alphas_cumprod.to(device)
+        self.snr_values = torch.sqrt(alphas_cumprod / (1 - alphas_cumprod))
+        self.snr_values_actual = alphas_cumprod / (1 - alphas_cumprod)
+
+        self.image_width = 32
+        self.image_height = 32
