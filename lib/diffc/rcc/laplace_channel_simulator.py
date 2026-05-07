@@ -21,7 +21,7 @@ class LaplaceChannelSimulator:
             # dkl = 0.5 * float((mu.astype(np.float32) ** 2).sum() / np.log(2))
             # kl divergence between L(mu, 1) and L(0, 1)
             abs_mu = np.abs(mu.astype(np.float32))
-            dkl = float((abs_mu + np.exp(-abs_mu) - 1).sum() / np.log(2))
+            dkl = float((abs_mu + np.exp(-abs_mu) - 1).sum() / np.log(2)) # bits
 
         chunk_sizes = get_chunk_sizes(dkl, self.max_chunk_size, self.chunk_padding)
         chunk_seeds, sample = chunk_and_encode(
