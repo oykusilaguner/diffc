@@ -37,10 +37,12 @@ def _reverse_channel_encode(mu_q_in, K, shared_seed=0):
     block_size = 256
     grid_size = (K + block_size - 1) // block_size
 
-    # Generate vector of random exponentials
-    t = cp.random.exponential(scale=1.0, size=K)
-    # take the log of the cumsum of those
-    log_cumsum_t = cp.log(cp.cumsum(t))
+    # Minimal random coding: independent exponentials, not Poisson arrival times.
+    # Seed from shared_seed so the encoder's selection is reproducible and keyed to
+    # the same shared randomness the decoder uses for candidate generation.
+    cp.random.seed(shared_seed)
+    e = cp.random.exponential(scale=1.0, size=K)
+    log_e = cp.log(e)
 
     # Launch main kernel
     reverse_channel_encode_kernel(
@@ -50,7 +52,8 @@ def _reverse_channel_encode(mu_q_in, K, shared_seed=0):
     )
     cp.cuda.stream.get_current_stream().synchronize()
 
-    s = log_cumsum_t - log_w
+    # argmin_k  E_k / w_k   (selects index k with prob proportional to w_k)
+    s = log_e - log_w
 
     winning_seed = cp.argmin(s).item()
     sample = generate_sample(dim, shared_seed, winning_seed)
