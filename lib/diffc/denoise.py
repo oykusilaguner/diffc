@@ -3,7 +3,7 @@ from lib.diffc.utils.alpha_beta import get_alpha_prod_and_beta_prod
 import torch
 
 @torch.no_grad()
-def denoise(noisy_latent, latent_timestep, timestep_schedule, noise_prediction_model):
+def denoise(noisy_latent, latent_timestep, timestep_schedule, noise_prediction_model, eta=0, denoise_seed=10):
     """
     Perform probability-flow-based denoising upon the noisy latent.
 
@@ -22,6 +22,14 @@ def denoise(noisy_latent, latent_timestep, timestep_schedule, noise_prediction_m
 
     timestep_schedule = [t for t in timestep_schedule if t < latent_timestep]
 
+    device = noise_prediction_model.device
+    gen = torch.Generator(device=device)
+
+    if denoise_seed is None:
+        gen.seed()
+    else:
+        gen.manual_seed(denoise_seed)
+       
     for prev_timestep in tqdm(
         timestep_schedule
     ):  # "previous" as in higher than the current snr
@@ -47,13 +55,27 @@ def denoise(noisy_latent, latent_timestep, timestep_schedule, noise_prediction_m
             sample - beta_prod_t ** (0.5) * model_output
         ) / alpha_prod_t ** (0.5)
         pred_epsilon = model_output
+    
+        # stochastic DDIM (DDIM paper eq. 12/16). eta=0 -> deterministic (original).
 
-        # 6. compute "direction pointing to x_t" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
-        pred_sample_direction = (1 - alpha_prod_t_prev) ** (0.5) * pred_epsilon
+        current_alpha_t = alpha_prod_t / alpha_prod_t_prev
+        current_beta_t = 1 - current_alpha_t
+        # sigma_t^2 = DDPM posterior variance, scaled by eta^2 (== `variance` in P.py)
+        sigma_t = eta * (
+            (1 - alpha_prod_t_prev) / (1 - alpha_prod_t) * current_beta_t
+        ) ** (0.5)
 
-        # 7. compute x_t without "random noise" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
+        # 6. direction term now excludes the sigma_t^2 budget
+        pred_sample_direction = (1 - alpha_prod_t_prev - sigma_t ** 2) ** (0.5) * pred_epsilon
+
+        # 7. add the stochastic noise term with FRESH, NON-SHARED randomness
+        noise = torch.randn(
+            latent.shape, device=latent.device, dtype=latent.dtype, generator=gen
+        )
         latent = (
-            alpha_prod_t_prev ** (0.5) * pred_original_sample + pred_sample_direction
+            alpha_prod_t_prev ** (0.5) * pred_original_sample
+            + pred_sample_direction
+            + sigma_t * noise
         )
 
         current_timestep = prev_timestep
