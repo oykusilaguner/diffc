@@ -3,7 +3,7 @@ from diffusers import DDPMScheduler, UNet2DModel
 from lib.models.latent_noise_prediction_model import LatentNoisePredictionModel
 
 
-class DDPM_CIFAR10(LatentNoisePredictionModel):
+class DDPM(LatentNoisePredictionModel):
     """
     Pixel-space DDPM trained on CIFAR-10 (32x32).
     No VAE — image_to_latent and latent_to_image are identity (with normalization).
